@@ -1,0 +1,171 @@
+General: The data structure will hold an 
+additional field, PSC, which is a pointer to a 
+snap-collector object. 
+
+
+
+class Node 
+    value 
+    key
+    Node* next
+
+class Report
+    Node * node
+    action                              //insert or Delete
+    Report * nextReport
+
+
+class CollectorNode
+    Node * node
+    CollectorNode *next
+
+    CollectorNode(Node *node)
+        node <- node
+        next <- NULL
+ 
+
+                                                
+
+
+class SnapCollector
+    active <- false   //indicates if the snap collect field is currently active
+    CollectorNode * head  // end of the list node (make head->next = tail)
+    CollectorNode * tail 
+
+    SnapCollector(){
+        CollectorNode * tempNode(null)
+        tempNode.next <- sentinelNode
+        head <- tempNode
+        tail <- tempNode
+    }
+    
+    Report report[]          //stores the head of reports for a given thread(size is the number of parallel threads)
+    
+
+    AddNode(Node* node, int tid)
+        CollectorNode * collectNode(node)
+        collectNode->next <- sentinelNode
+        temp_tail <- tail
+
+        if tail-> next != sentinelNode              // go to the tail
+            cas(tail,temp_tail ,temp_tail->next )
+            temp_tail = temp_tail->next
+        
+        if temp_tail->node->key > collectnode->node->key 
+            return tail
+        else
+            cas(temp_tail->next, sentinelNode, collectNode )
+            cas(tail,temp_tail,temp_tail->next)
+            return tail
+            
+
+    addReport(Report * report, int tid)
+        temp = reports[tid]
+        if(cas(reports[tid] temp, report))
+            temp->next <- report
+        
+    IsActive()
+        return active
+    
+    BlockFurtherNodes()
+        dummy_node <- create_dummy_node()
+        tail_temp <- tail
+        while !cas(tail,tail_temp,dummy_node) //keys are limted hence waitfree
+
+    Deactivate()
+        active <- True
+
+    BlockFurtherReports()
+        for reportTail in tailReports:
+            tail_temp <- reportTail
+            dummy_node <- create_dummy_node()
+            while(!cas(reportTail , tail_temp,dummy_node)) //keys are limted hence waitfree
+
+    ReadPointers()
+    ReadReports()
+
+Initialize()
+    Initialize the data structure as usual
+    PSC = (address of) NewSnapCollector()
+    PSC->Deactivate() 
+
+//help in physical deletion and report(before)
+Delete(int key) 
+    search for a node with required key 
+    if not found 
+        return false
+    else // found a victim node with the key 
+        mark the victim node
+        ReportDelete(pointer to victim)
+        physically remove the victim node 
+        return true
+ 
+//help in physical deletion and report(before) 
+Insert(Node n)
+    search for the place to insert the node 
+    n as usual, but before removing 
+    a marked node, first call ReportDelete() 
+    If n.key is already present in the data 
+
+        data structure on a different node h
+        ReportInsert(pointer to h) 
+        return false 
+    else
+        Insert n into the data structure 
+        ReportInsert(pointer to n)
+        return true 
+
+ReportDelete(Node *victim)
+    SC = (dereference) PSC
+    If (SC.IsActive()) 
+        SC.Report(victim, DELETED)
+
+ReportInsert(Node* newNode)
+    SC = (dereference) PSC
+    if (SC.IsActive())
+        if (newNode is not marked)
+            Report(newNode, INSERt)
+
+
+Contains(int key) 
+    search for a node n with the key 
+    if not found then return false 
+    else if n is marked 
+        ReportDelete(pointer to n)
+        return false
+    else ReportInsert(pointer to n) 
+        return true
+        
+
+
+TakeSnapshot()
+    SC = AcquireSnapCollector()
+    CollectSnapshot(SC)
+    ReconstructUsingReports(SC)
+
+AcquireSnapCollector()
+    SC = (dereference) PSC 
+    if (SC is not NULL and SC.IsActive()) 
+        return SC 
+    newSC = NewSnapCollector() 
+    CAS(PSC, SC, newSC) 
+    newSC = (dereference) PSC 
+    return newSC 
+
+CollectSnapshot(SC)
+    Node curr = head of structure 
+    While (SC.IsActive()) 
+        if (curr is not marked)
+            SC.AddNode(pointer to curr) 
+        if (curr.next is null) // curr is the last
+            SC.BlockFurtherNodes()
+    SC.Deactivate()
+    
+    SC.BlockFurtherReports()
+
+ReconstructUsingReports(SC)
+    nodes = SC.ReadPointers()
+    reports = SC.ReadReports()
+    a node N belong to the snapshot iff:
+    ((N has a reference in nodes
+    N has an INSERTED report) AND does not have a DELETED report) 
