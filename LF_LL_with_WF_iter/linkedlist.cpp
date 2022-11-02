@@ -1,24 +1,22 @@
 #include "linkedlist.h"
 
-Node* new_node(long int k, Node *next)
-{
-  Node *node = new Node();
-  node->key = k;
-  node->next.store(next);
+// Node* new_node(long int k, Node *next)
+// {
+//   Node *node = new Node();
+//   node->key = k;
+//   node->next.store(next);
 
-  return node;
-}
+//   return node;
+// }
 
-Node **set_new()
+Node *set_new()
 {
-  Node** set = new Node*();
   Node *min, *max;
 
-  max = new_node(LONG_MAX	, NULL);
-  min = new_node(LONG_MIN	, max);
-  set = &min;
+  max = new Node(LONG_MAX	, NULL);
+  min = new Node(LONG_MIN	, max);
 
-  return set;
+  return min;   // return head sentinel
 }
 
 void set_delete(Node **set)

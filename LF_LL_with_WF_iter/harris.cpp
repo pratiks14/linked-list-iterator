@@ -1,6 +1,5 @@
 #include "harris.h"
-#include "iterator.h"
-
+using namespace std;
 
 
 void ReportDelete(Node *victim, int tid, atomic<SnapCollector*> PSC)
@@ -78,36 +77,35 @@ inline long get_marked_ref(long w)
  */
 
 
-Node* harris_search(Node **set, long int key, Node *left_node, atomic<SnapCollector*> PSC, int tid) 
+Node* harris_search(Node *head, long int key, Node **left_node, atomic<SnapCollector*> PSC, int tid) 
 {
-  Node *left_node_next;
+  Node *left_node_next = head;
   Node *right_node;
-  left_node_next = *set;
 	
   do
     {
-      Node *t = *set;   // head
-      Node *t_next = (*set)->next; // t and t_next are two iterator of our linked list
+      Node *t = head;   // head
+      Node *t_next = head->next.load(); // t and t_next are two iterator of our linked list
 		
       /* 1. Find left_node and right_node */
       do 
       {
           if (!is_marked_ref((long) t_next)) // if not marked, it means that t is not marked for delete
           {
-              left_node = t;
+              *left_node = t;
               left_node_next = t_next;
           }
           else
           {
-            ReportDelete(left_node,tid, PSC.load());    // Report Delete
+            ReportDelete(*left_node,tid, PSC.load());    // Report Delete
           }
           t = (Node *) get_unmarked_ref((long) t_next); // because marked ref is unaccessible
 
-          if (!t->next)     // if t is the tail, then break
+          if (t->next.load() == NULL)     // if t is the tail, then break
           {
               break;
           }
-          t_next = t->next;
+          t_next = t->next.load();
       }while (is_marked_ref((long) t_next) || (t->key < key));
     
       right_node = t;
@@ -115,7 +113,7 @@ Node* harris_search(Node **set, long int key, Node *left_node, atomic<SnapCollec
       /* 2. Check that nodes are adjacent, if yes then we can return else we will have to help to physically remove it. */
       if (left_node_next == right_node) 
       {
-          if (right_node->next && is_marked_ref((long)right_node->next.load()))     // if right node gets marked, restart
+          if (right_node->next.load()!=NULL && is_marked_ref((long)right_node->next.load()))     // if right node gets marked, restart
           {
               continue;
           }
@@ -127,7 +125,7 @@ Node* harris_search(Node **set, long int key, Node *left_node, atomic<SnapCollec
 
       
       /* 3. Remove one or more marked nodes (helping phase) */
-      if(atomic_compare_exchange_strong(&left_node->next, &left_node_next, right_node)) 
+      if(atomic_compare_exchange_strong(&(*left_node)->next, &left_node_next, right_node)) 
       {
           //report delete
           if (!(right_node->next && is_marked_ref((long)right_node->next.load())))
@@ -142,12 +140,13 @@ Node* harris_search(Node **set, long int key, Node *left_node, atomic<SnapCollec
 /*
  * harris_find returns whether there is a node in the list owning value val.
  */
-long int harris_find(Node **set, long int key, atomic<SnapCollector*> PSC, int tid) 
+long int harris_find(Node *head, long int key, atomic<SnapCollector*> PSC, int tid) 
 {
   Node *right_node, *left_node;
-  left_node = *set;
+  left_node = head;
 	
-  right_node = harris_search(set, key, left_node, PSC.load(), tid);
+  right_node = harris_search(head, key, &left_node, PSC.load(), tid);
+    
   if ((right_node->next == NULL) || right_node->key != key)
   {
     return 0;
@@ -165,14 +164,14 @@ long int harris_find(Node **set, long int key, atomic<SnapCollector*> PSC, int t
  * harris_find inserts a new node with the given value val in the list
  * (if the value was absent) or does nothing (if the value is already present).
  */
-int harris_insert(Node **set, long int key, atomic<SnapCollector*> PSC, int tid) 
+int harris_insert(Node *head, long int key, atomic<SnapCollector*> PSC, int tid) 
 {
   Node *newnode = NULL, *right_node, *left_node;
-  left_node = *set;
+  left_node = head;
 	
   do 
     {
-      right_node = harris_search(set, key, left_node, PSC.load(), tid);
+      right_node = harris_search(head, key, &left_node, PSC.load(), tid);
       if (right_node->key == key)
       {
         ReportInsert(right_node, tid, PSC.load());    // is atomic getting affected because of load (DOUBT)
@@ -181,7 +180,7 @@ int harris_insert(Node **set, long int key, atomic<SnapCollector*> PSC, int tid)
 
       if (newnode == NULL)
       {
-        newnode = new_node(key, right_node);
+        newnode = new Node(key, right_node);
       }
       else
       {
@@ -196,14 +195,14 @@ int harris_insert(Node **set, long int key, atomic<SnapCollector*> PSC, int tid)
     }while(1);
 }
 
-int harris_delete(Node **set, long int key, atomic<SnapCollector*> PSC, int tid)
+int harris_delete(Node *head, long int key, atomic<SnapCollector*> PSC, int tid)
 {
 	Node *right_node, *right_node_next, *left_node;
-	left_node = *set;
+	left_node = head;
 	
 	do
   {
-		right_node = harris_search(set, key, left_node, PSC.load(), tid);
+		right_node = harris_search(head, key, &left_node, PSC.load(), tid);
 		
     if (right_node->key != key)
 			return 0;
@@ -220,7 +219,58 @@ int harris_delete(Node **set, long int key, atomic<SnapCollector*> PSC, int tid)
   ReportDelete(right_node, tid, PSC.load());    // is atomic getting affected because of load (DOUBT). Check whether rightnode has to be reported or what
 
   if (!atomic_compare_exchange_strong(&left_node->next, &right_node, right_node_next))
-		right_node = harris_search(set, right_node->key, left_node, PSC.load(), tid);
+  {
+    right_node = harris_search(head, right_node->key, &left_node, PSC.load(), tid);
+  }
+		
 	
   return 1;
 }
+
+// remove this, just to check the compilation of harris.cpp
+/*
+int main()
+{
+    atomic<SnapCollector*> psc = new SnapCollector(1);
+    cout<<"Enter Your Choices below (ONLY LOCK FREE LINKED LIST program). \n\n\n";
+    int choice;
+    Node *head_loc = set_new();    // head holds the address of the head sentinel node
+    long int input;
+
+    while(1)
+    {
+        cout<<"Press '1' for inserting, '2' for deleting, '3' for printing and '4' for ending the program.\n";
+        cin>>choice;
+
+        if(choice == 1) // insert
+        {
+          cout<<"Enter the value you want to Insert : ";
+          cin>>input;
+          cout<<"\n";
+          harris_insert(head_loc,input,NULL,0);
+        }
+        else if(choice == 2)  // delete
+        {
+          cout<<"Enter the value you want to Delete : ";
+          cin>>input;
+          cout<<"\n";
+          harris_delete(head_loc, input, NULL, 0);
+        }
+        else if(choice == 3)  // print LL
+        {
+          Node *temp_head = head_loc;
+           while(temp_head)
+          {
+            cout<<temp_head->key<<" -> ";
+            temp_head = temp_head->next;
+          }
+          cout<<"\n\n\n";
+        }
+        else  // exit
+        {
+            break;
+        }
+    }
+    return 0;
+}
+*/

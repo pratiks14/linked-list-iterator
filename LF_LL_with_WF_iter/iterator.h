@@ -1,6 +1,7 @@
 #include<iostream>
 #include<atomic>
-#include "harris.h"
+//#include "harris.h"
+#include "linkedlist.h"
 using namespace std;
 
 
@@ -11,6 +12,7 @@ class Report
       Node* node;
       int action;                              //1 for insert or 2 for Delete or 3 for DUMMY
       Report* nextReport;
+      bool read_report = false;
 
     Report operator = (Report const &obj)
     {
@@ -18,6 +20,7 @@ class Report
          res.node = obj.node;
          res.action = obj.action;
          res.nextReport = obj.nextReport;
+         res.read_report = obj.read_report;
          return res;
     }
 };
@@ -29,12 +32,13 @@ class CollectorNode
       //atomic<CollectorNode> *next;  // pointer to an atomic obj
       atomic<CollectorNode*> next_CollectorNode;  // atomic pointer to obj
       //CollectorNode* next_CollectorNode;  //chng1
-
+      
       CollectorNode(Node* n)
       {
-        node = n;
-        next_CollectorNode.store(NULL);
+        this->node = n;
+        this->next_CollectorNode.store(NULL);
       }
+
 };
 
  
@@ -51,11 +55,12 @@ class SnapCollector
 
     SnapCollector(int total_threads)
     {
-        CollectorNode* tempNode(NULL);
-        tail_sentinal = tempNode;
-        tempNode->next_CollectorNode = tail_sentinal;
-        head_sentinal  = tail_sentinal;
-
+        CollectorNode* tempNode1 = new CollectorNode(NULL);
+        CollectorNode* tempNode2 = new CollectorNode(NULL);
+        tempNode1->next_CollectorNode = tempNode2;
+        this->head_sentinal = tempNode1;
+        this->tail_sentinal = tempNode2;
+        
         tail.store(head_sentinal);  // initially tail is at the head.
         //report = new Report[total_threads];
         heads_of_reports = new atomic<Report*>[total_threads];
@@ -87,7 +92,16 @@ class SnapCollector
         }
         //temp_tail_atomic.store(temp_tail_non_atomic->next);
         
-        if(temp_tail_non_atomic->node->key > collectNode->node->key)
+        if(temp_tail_non_atomic == head_sentinal) // first node to be added
+        {
+          //cas(temp_tail->next, sentinelNode, collectNode);
+          atomic_compare_exchange_strong(&temp_tail_non_atomic->next_CollectorNode, &tail_sentinal, collectNode);
+          
+          //cas(tail,temp_tail,temp_tail->next)
+          atomic_compare_exchange_strong(&tail, &temp_tail_non_atomic, temp_tail_non_atomic->next_CollectorNode);
+          return tail;
+        }
+        else if(temp_tail_non_atomic->node->key > collectNode->node->key)  // if tail's key is larger than the new node being added to snapshot LL
         {
           return tail;
         } 
@@ -119,36 +133,41 @@ class SnapCollector
         
     bool IsActive()
     {
-      return active;
+      return this->active;
     }
         
     
     void BlockFurtherNodes()
     {
-      Node* largest_val_node;
-      largest_val_node->key=INT_MAX;
-      largest_val_node->next=NULL;
-      CollectorNode* dummynode = new CollectorNode(largest_val_node);
-      dummynode->next_CollectorNode=tail_sentinal;
+      Node *largest_val_node = new Node(LONG_MAX, NULL);
+      CollectorNode *dummynode = new CollectorNode(largest_val_node);
+      dummynode->next_CollectorNode.store(tail_sentinal);
       
-      CollectorNode* temp_tail;
-      temp_tail = tail;
+      CollectorNode *temp_tail = tail;
       //######################################
               //RECHECK-REDISCUSS-2
       //######################################
-      //while(!atomic_compare_exchange_strong(&tail->nex, &temp_tail, dummynode));
+      //while(!atomic_compare_exchange_strong(&tail->next, &temp_tail, dummynode));
       //while(!atomic_compare_exchange_strong(&tail, &temp_tail, dummynode));
 
-      while(!atomic_compare_exchange_strong(&temp_tail->next_CollectorNode, &tail_sentinal, dummynode));
-      while(!atomic_compare_exchange_strong(&tail, &temp_tail, temp_tail->next_CollectorNode)) // THIS IS NOT NEEDED IF THE ABOVE CAS SUCCEEDED
+      // while(!atomic_compare_exchange_strong(&temp_tail->next_CollectorNode, &tail_sentinal, dummynode))
+      // {
+      //   temp_tail = tail;
+      // }
+
+      if(temp_tail->node->key != LONG_MAX)// if tail is not dummy node then proceed
+            temp_tail->next_CollectorNode.store(dummynode);   // discussed in a meeting
+      tail.store(temp_tail);
+      
+      /*while(!atomic_compare_exchange_strong(&tail, &temp_tail, temp_tail->next_CollectorNode)) // THIS IS NOT NEEDED IF THE ABOVE CAS SUCCEEDED
       {
         temp_tail = tail;
-      }
+      }*/
     }
 
     void Deactivate()
     {
-      active = false;
+      this->active = false;
     }
 
     void BlockFurtherReports()
@@ -161,6 +180,8 @@ class SnapCollector
         dummy_report->nextReport=heads_of_reports[i];
         Report *temp = heads_of_reports[i];
 
+        // if this changes then recheck the "recons using repo" logic in main function
+        // since will only run limited numbner of times, therefore WF
         while(!atomic_compare_exchange_strong(&heads_of_reports[i], &temp, dummy_report))
         {
           temp = heads_of_reports[i];

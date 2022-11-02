@@ -1,4 +1,4 @@
-#include "linkedlist.h"
+#include "iterator.h"
 using namespace std;
 
 
@@ -12,8 +12,8 @@ inline long set_mark(long i);
 inline long get_unmarked_ref(long w);
 inline long get_marked_ref(long w);
 
-Node* harris_search(Node **set, long int key, Node** left_node);
-long int harris_find(Node **set, long int key);
-int harris_insert(Node **set, long int key);
-int harris_delete(Node **set, long int key);
+Node* harris_search(Node *head, long int key, Node** left_node);
+long int harris_find(Node *head, long int key);
+int harris_insert(Node *head, long int key, atomic<SnapCollector*> PSC, int tid);
+int harris_delete(Node *head, long int key, atomic<SnapCollector*> PSC, int tid);
 
