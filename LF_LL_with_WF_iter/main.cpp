@@ -80,7 +80,7 @@ void ReconstructUsingReports(SnapCollector *SC)
       {
         if(temp->node)
         {
-          cout<< temp->node->key << " -> ";
+          cout<< temp->node->key << "("<<  temp->node <<") -> ";
         }
         else
         {
@@ -97,7 +97,7 @@ void ReconstructUsingReports(SnapCollector *SC)
   {
     Report *curr_head = SC->heads_of_reports[i];
     curr_head = curr_head->nextReport; // ignore the dummy report
-    while (curr_head)
+    while(curr_head)
     {
       total_report_cnt++;
       arr_of_all_reports.push_back(*curr_head);
@@ -105,7 +105,21 @@ void ReconstructUsingReports(SnapCollector *SC)
     }
   }
 
+  cout<<"\n THE REPORT ARRAY IS AS FOLLOWS: \n";
+  for(auto itr = arr_of_all_reports.begin(); itr != arr_of_all_reports.end(); itr++)
+  {
+    cout<< (*itr).node << " address: "<< (*itr).node << " action: "<< (*itr).action << "\n";
+  }
+  cout<<"\n\n";
+
   sort(arr_of_all_reports.begin(), arr_of_all_reports.end(), &comparator);
+
+  cout<<"\n THE REPORT ARRAY AFTER 'SORTING' IS AS FOLLOWS: \n";
+  for(auto itr = arr_of_all_reports.begin(); itr != arr_of_all_reports.end(); itr++)
+  {
+    cout<< (*itr).node << " address: "<< (*itr).node << " action: "<< (*itr).action << "\n";
+  }
+  cout<<"\n\n";
 
   int report_number = 0;
   Node *work_in_progess_node = NULL;
@@ -174,7 +188,7 @@ void ReconstructUsingReports(SnapCollector *SC)
         }
       }
       // if no then insert it
-      if (iter_collected_LL->node == work_in_progess_node)
+      if (iter_collected_LL->node != work_in_progess_node)
       {
         CollectorNode *new_node = new CollectorNode(work_in_progess_node);
         new_node->next_CollectorNode.store(prev_collected_LL->next_CollectorNode.load());
@@ -194,7 +208,7 @@ SnapCollector *TakeSnapshot(int tid)
 
 int main()
 {
-  cout << "Try 18 \n\n";
+  cout << "Try 20 \n\n";
   cout << "Enter Number of threads \n";
   cin >> total_number_of_threads;
 

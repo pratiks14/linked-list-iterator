@@ -5,7 +5,7 @@ using namespace std;
 void ReportDelete(Node *victim, int tid, atomic<SnapCollector*> PSC)
 {
   Report *rep = new Report();
-  rep->action = 3;    // code for delete
+  rep->action = 2;    // code for delete
   rep->node = victim;
   rep->nextReport = NULL;
   if(PSC.load()->IsActive())
@@ -15,7 +15,7 @@ void ReportDelete(Node *victim, int tid, atomic<SnapCollector*> PSC)
 void ReportInsert(Node *new_node, int tid, atomic<SnapCollector*> PSC)
 {
   Report *rep = new Report();
-  rep->action = 2;    // code for insert
+  rep->action = 1;    // code for insert
   rep->node = new_node;
   rep->nextReport = NULL;
   if(PSC.load()->IsActive())

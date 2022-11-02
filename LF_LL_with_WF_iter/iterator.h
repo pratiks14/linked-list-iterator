@@ -14,15 +14,15 @@ class Report
       Report* nextReport;
       bool read_report = false;
 
-    Report operator = (Report const &obj)
-    {
-         Report res;
-         res.node = obj.node;
-         res.action = obj.action;
-         res.nextReport = obj.nextReport;
-         res.read_report = obj.read_report;
-         return res;
-    }
+    // Report operator = (Report const &obj)
+    // {
+    //      Report res;
+    //      res.node = obj.node;
+    //      res.action = obj.action;
+    //      res.nextReport = obj.nextReport;
+    //      res.read_report = obj.read_report;
+    //      return res;
+    // }
 };
 
 class CollectorNode
@@ -55,6 +55,7 @@ class SnapCollector
 
     SnapCollector(int total_threads)
     {
+        number_of_threads = total_threads;
         CollectorNode* tempNode1 = new CollectorNode(NULL);
         CollectorNode* tempNode2 = new CollectorNode(NULL);
         tempNode1->next_CollectorNode = tempNode2;
@@ -172,21 +173,23 @@ class SnapCollector
 
     void BlockFurtherReports()
     {
+      cout<<"\n\n\n HI FROM BFR BFR BFR \n\n\n";
       for(int i=0;i<number_of_threads;i++)
       {
         Report *dummy_report = new Report();
         dummy_report->action=3;
         dummy_report->node=NULL;
-        dummy_report->nextReport=heads_of_reports[i];
         Report *temp = heads_of_reports[i];
+        dummy_report->nextReport=temp;
+        
 
-        // if this changes then recheck the "recons using repo" logic in main function
         // since will only run limited numbner of times, therefore WF
         while(!atomic_compare_exchange_strong(&heads_of_reports[i], &temp, dummy_report))
         {
           temp = heads_of_reports[i];
+          dummy_report->nextReport=temp;
         }
-        dummy_report->nextReport=temp;
+        cout<<"CALLING FROM BLOCKFURTHER REPORTS and dummy node's address = "<<dummy_report<<" head has address "<<heads_of_reports[i]<<"\n\n";
       }
     }
 
