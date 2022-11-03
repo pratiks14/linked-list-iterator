@@ -2,6 +2,8 @@
 #include <atomic>
 #include <algorithm>
 #include <vector>
+#include <thread>
+#include <fstream>
 #include "harris.h"
 using namespace std;
 
@@ -25,8 +27,10 @@ SnapCollector *AcquireSnapCollector()
 void CollectSnapshot(SnapCollector *SC, int tid)
 {
   Node *curr = head;
+  int garbage_input;
   while (SC->IsActive())
   {
+    
     if(!is_marked_ref((long)curr))
     {
       SC->AddNode(curr, tid);
@@ -50,6 +54,8 @@ void CollectSnapshot(SnapCollector *SC, int tid)
       }
       cout<<"\n\n";
 
+      cout<<"waiting for the snapshot to deactivate \n";
+      cin>>garbage_input;
       SC->BlockFurtherNodes();
       SC->Deactivate();
     }
@@ -206,9 +212,19 @@ SnapCollector *TakeSnapshot(int tid)
   return SC;
 }
 
+void* thread_custom_delete(void* arg)
+{
+  std::this_thread::sleep_for(60000ms);
+  ofstream op("success.txt");
+  op<<"\n\n ***********DELETE THREAD ENTRY***********\n\n";
+  harris_delete(head, 3, PSC.load(), 1);
+  op<<"\n\n ***********DELETE THREAD EXIT***********\n\n";
+  pthread_exit(NULL);
+}
+
 int main()
 {
-  cout << "Try 20 \n\n";
+  cout << "Try 24 \n\n";
   cout << "Enter Number of threads \n";
   cin >> total_number_of_threads;
 
@@ -219,9 +235,11 @@ int main()
 
   PSC = new SnapCollector(total_number_of_threads);
 
+  pthread_t th1;
+
   while (1)
   {
-    cout << "Press '1' for inserting, '2' for deleting, '3' for printing, '4' for snapshot and '5' for ending the program.\n";
+    cout << "Press '1' for inserting, '2' for deleting, '3' for printing, '4' for snapshot, '5' for new thread delete and '6' for ending the program.\n";
     cin >> choice;
 
     if (choice == 1) // insert
@@ -266,10 +284,15 @@ int main()
       }
       cout << " +Infinity \n\n\n";
     }
+    else if(choice == 5)  // make a thread which deletes a node, whereas snapshot is waiting for the dummy input
+    {
+      pthread_create(&th1, NULL, &thread_custom_delete, NULL);
+    }
     else // exit
     {
       break;
     }
   }
+  pthread_join(th1, NULL);
   return 0;
 }
